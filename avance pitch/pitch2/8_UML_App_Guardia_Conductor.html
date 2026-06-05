@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UML: Secuencia App Guardia y Conductor</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        // Inicializar Mermaid con tema moderno/neutral
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'neutral',
+            securityLevel: 'loose'
+        });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 40px 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        h1 {
+            color: #1a202c;
+            font-size: 24px;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 12px;
+        }
+        p {
+            color: #718096;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        .diagram-wrapper {
+            overflow-x: auto;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Estructura UML: Servicio App Guardia y Conductor</h1>
+    <p>Flujo Técnico de Ingreso NFC, Asignación y Confirmación de Ubicación en Tiempo Real integrado con Angular y Supabase.</p>
+
+    <div class="diagram-wrapper">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Conductor
+    actor Guardia
+    participant SensorNFC as Lector NFC (Portería)
+    participant AngularFrontend as Frontend (Angular App)
+    participant BackendAPI as API Backend (Supabase)
+    participant Realtime as WebSockets (Supabase Realtime)
+    participant Database as Base de Datos (PostgreSQL)
+
+    %% --- FLUJO A: INGRESO VEHICULAR Y ESCANEO ---
+    Note over Conductor, BackendAPI: FLUJO A: Ingreso Vehicular y Escaneo NFC (RF-2.1)
+    Conductor->>SensorNFC: Acerca credencial (Ingreso al recinto)
+    SensorNFC->>BackendAPI: POST /api/ingresos {nfc_tag}
+    activate BackendAPI
+    BackendAPI->>Database: INSERT Ocupacion (estado: 'En_Curso')
+    Database-->>BackendAPI: OK (id_ocupacion)
+    
+    %% Sincronización en Tiempo Real al Guardia
+    BackendAPI->>Realtime: Emitir evento 'nuevo_ingreso'
+    deactivate BackendAPI
+    Realtime-->>AngularFrontend: WebSocket Event (Aforo +1)
+    AngularFrontend->>Guardia: Mostrar sugerencia "Ir a A-12"
+
+    %% --- FLUJO B: CONFIRMACIÓN DE UBICACIÓN ---
+    Note over Conductor, Database: FLUJO B: Confirmación Manual de Ubicación (RF-1.2)
+    Conductor->>AngularFrontend: Abre la App Angular y selecciona 'A-12'
+    AngularFrontend->>BackendAPI: PUT /api/ocupacion/ubicacion {espacio: 'A-12'}
+    
+    %% Validación de Backend
+    activate BackendAPI
+    BackendAPI->>Database: SELECT estado FROM Espacios WHERE id = 'A-12'
+    Database-->>BackendAPI: estado: 'Libre'
+    
+    BackendAPI->>Database: UPDATE Espacios SET estado = 'Ocupado'
+    Database-->>BackendAPI: OK
+    
+    %% Respuesta al Frontend
+    BackendAPI-->>AngularFrontend: 200 OK (Estacionamiento Confirmado)
+    AngularFrontend-->>Conductor: Muestra "Estacionamiento A-12 Confirmado"
+
+    %% Sincronización a todos los clientes (Angular)
+    BackendAPI->>Realtime: Emitir evento 'espacio_ocupado' {espacio: 'A-12'}
+    deactivate BackendAPI
+    Realtime-->>AngularFrontend: WebSocket Event (Actualizar Mapa)
+    AngularFrontend->>AngularFrontend: Angular re-renderiza el mapa (Espacio A-12 en Rojo)
+        </pre>
+    </div>
+</div>
+
+</body>
+</html>
