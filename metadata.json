@@ -1,0 +1,6 @@
+{
+  "name": "Modelador de Estacionamiento 2D/3D",
+  "description": "Un simulador y modelador de estacionamiento interactivo con vistas en 2D y 3D, con gestion de vehiculos y basado en la estructura de las imagenes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
