@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UML: Secuencia Panel Jefatura y Servicios Generales</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        // Inicializar Mermaid con tema moderno/neutral
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'neutral',
+            securityLevel: 'loose'
+        });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 40px 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        h1 {
+            color: #1a202c;
+            font-size: 24px;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 12px;
+        }
+        p {
+            color: #718096;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        .diagram-wrapper {
+            overflow-x: auto;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Estructura UML: Servicio Panel Jefatura y Servicios Generales</h1>
+    <p>Flujo Técnico de Datos en Tiempo Real e Integración de Angular con Supabase Backend.</p>
+
+    <div class="diagram-wrapper">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Jefe as Jefe de Seguridad / Servicios Generales
+    participant Angular as Angular Frontend (LayoutDashboard)
+    participant State as State Controller (RxJS / NgRx / Services)
+    participant Supabase as Supabase Backend (PostgreSQL)
+    participant Realtime as Supabase Realtime (WebSockets)
+    participant GuardApp as App Guardia / Conductor
+
+    %% --- BLOQUE DE CONTROL DE ACCESO / AUTENTICACIÓN ---
+    Note over Jefe, Supabase: Inicialización de Sesión Operativa
+    Jefe->>Angular: Ingresa a "Panel Jefatura y Servicios Generales"
+    Angular->>Supabase: Validar Rol de Usuario (Firebase Auth / Supabase Auth)
+    Supabase-->>Angular: Token Válido (Role: 'jefatura' | 'servicios_generales')
+
+    %% --- FLUJO A: GESTIÓN DE REQUISITOS DE BLOQUEOS (RF-3.1) ---
+    Note over Jefe, GuardApp: FLUJO A: Gestión de Reservas y Bloqueos (RF-3.1)
+    Jefe->>Angular: Hace clic en espacio vacío en Mapa (2D SVG / 3D Three.js)
+    Angular->>State: selectSpace(spaceId)
+    State-->>Angular: Actualiza selectedSpaceId y abre SidebarControl (Drawer)
+    Jefe->>Angular: Introduce motivo ("Mantenimiento" / "Visita VIP") y presiona "Bloquear"
+    Angular->>State: handleBlockSpace(spaceId, reason)
+    
+    activate State
+    State->>Supabase: HTTP PATCH /rpc/block_parking_space {id: spaceId, status: 'BLOCKED', blockReason: reason}
+    activate Supabase
+    Supabase->>Supabase: Registra en BD & Inserta EventLog (type: 'security_block')
+    Supabase-->>State: 200 OK (Confirmación de Persistencia)
+    deactivate Supabase
+    
+    State->>Realtime: Broadcast evento 'SPACE_UPDATED' {id: spaceId, status: 'BLOCKED'}
+    deactivate State
+    
+    par Notificación en Tiempo Real (&lt;500ms)
+        Realtime-->>Angular: WebSocket: Actualización de Estado (Update Local State)
+        Angular-->>Jefe: Renderiza espacio en color Gris/Bloqueado en el Mapa
+    and Sincronización con otros Servicios
+        Realtime-->>GuardApp: WebSocket: Forzar desocupación / Inhabilitar Selección
+        Note over GuardApp: Espacio bloqueado para Guardias y Conductores
+    end
+
+    %% --- FLUJO B: DASHBOARD DE ESTADÍSTICAS (RF-3.2) ---
+    Note over Jefe, Supabase: FLUJO B: Dashboard de Estadísticas y Tendencias (RF-3.2)
+    Jefe->>Angular: Selecciona pestaña "Métricas de Sede"
+    Angular->>State: generateDashboardReport()
+    
+    activate State
+    State->>Supabase: HTTP GET /v1/parking_stats & /v1/history_logs
+    activate Supabase
+    Supabase->>Supabase: Calcular métricas (occupancyRate, peakHours, blockedTotal)
+    Supabase-->>State: Retorna JSON (Modelo ParkingStats + Logs Históricos)
+    deactivate Supabase
+    
+    State-->>Angular: Inyecta datos a componentes reactivos (KPIWidgets / Recharts)
+    deactivate State
+    Angular-->>Jefe: Despliega Gráficos de Ocupación, Slots PMR/EV y Alertas en tiempo real
+        </pre>
+    </div>
+</div>
+
+</body>
+</html>
