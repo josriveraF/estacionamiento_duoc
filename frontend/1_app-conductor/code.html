@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Duoc UC Parking - Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-container": "#003366",
+                    "outline-variant": "#c3c6d1",
+                    "surface-bright": "#f7f9fc",
+                    "on-surface-variant": "#43474f",
+                    "primary": "#001e40",
+                    "inverse-surface": "#2d3133",
+                    "surface-container-highest": "#e0e3e6",
+                    "surface-container-low": "#f2f4f7",
+                    "on-primary-fixed-variant": "#1f477b",
+                    "on-secondary": "#ffffff",
+                    "tertiary-container": "#592300",
+                    "on-secondary-fixed-variant": "#584400",
+                    "tertiary-fixed": "#ffdbca",
+                    "on-background": "#191c1e",
+                    "on-primary-fixed": "#001b3c",
+                    "surface-tint": "#3a5f94",
+                    "outline": "#737780",
+                    "background": "#f7f9fc",
+                    "primary-fixed": "#d5e3ff",
+                    "on-error": "#ffffff",
+                    "tertiary": "#381300",
+                    "surface-variant": "#e0e3e6",
+                    "on-tertiary-fixed-variant": "#723610",
+                    "on-secondary-fixed": "#241a00",
+                    "inverse-on-surface": "#eff1f4",
+                    "surface": "#f7f9fc",
+                    "error": "#ba1a1a",
+                    "on-surface": "#191c1e",
+                    "on-tertiary": "#ffffff",
+                    "secondary": "#745b00",
+                    "on-primary-container": "#799dd6",
+                    "on-tertiary-fixed": "#341100",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#a7c8ff",
+                    "primary-fixed-dim": "#a7c8ff",
+                    "surface-dim": "#d8dadd",
+                    "secondary-container": "#fecb00",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#ffb690",
+                    "error-container": "#ffdad6",
+                    "surface-container-high": "#e6e8eb",
+                    "on-secondary-container": "#6e5700",
+                    "surface-container": "#eceef1",
+                    "secondary-fixed-dim": "#f1c100",
+                    "on-tertiary-container": "#d8885c",
+                    "secondary-fixed": "#ffe08b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "card": "24px",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "md": "16px",
+                    "lg": "24px",
+                    "sm": "12px",
+                    "xl": "32px",
+                    "base": "4px",
+                    "gutter-mobile": "16px",
+                    "xs": "8px",
+                    "margin-mobile": "20px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "label-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .nfc-wave {
+            animation: pulse-waves 2s infinite;
+        }
+        @keyframes pulse-waves {
+            0% { opacity: 0.3; transform: scale(0.95); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.3; transform: scale(0.95); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-50 bg-surface flex justify-between items-center px-margin-mobile py-sm w-full">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A professional close-up portrait of a young college student with a friendly expression. The lighting is soft and natural, typical of a bright campus environment. The image uses a clean, high-key aesthetic with a shallow depth of field, focusing on the individual's face while blurring the modern university architecture in the background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAglRFl50gdUGzbFTUNsM-0M1K_3OCz5odj6831z0NN0bb3PoWu7idQqcEa2XhxSlGewQFNINhK2zOd6sxQ38W_HQqeGEVegHzpCbdRL7u0aI2aagZFV17lG-bsHc5nUgWyP6R2Ei_hTT_wYVZNJIUPXMgOcKW6NFaoi9J-q6ZvpT3s1pZ4pbCIc2JJ4_fvzCss0jry91tM7aA7OXrXcRtdJGuj6cUGUALtq3fsAOjfiqvZ3L7M_JplPtrO0VOnzMSSiMxQnD-NOFM"/>
+</div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary">Hola, Estudiante</h1>
+</div>
+<button class="active:scale-95 transition-transform duration-200 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-primary text-[28px]" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="px-margin-mobile mt-lg space-y-lg">
+<!-- Status Card -->
+<section class="bg-[#e7f0fe] rounded-card p-lg shadow-[0_4px_20px_rgba(0,51,102,0.08)] border border-[#d0e1fd]">
+<div class="flex justify-between items-start mb-md">
+<div>
+<span class="font-label-sm text-label-sm text-on-primary-fixed-variant uppercase tracking-wider">Estado Actual</span>
+<h2 class="font-headline-sm text-headline-sm text-primary mt-base">Estacionado en Espacio B-12</h2>
+</div>
+<div class="bg-secondary-container text-on-secondary-container px-sm py-xs rounded-full font-label-sm text-label-sm font-bold">
+                    ACTIVO
+                </div>
+</div>
+<div class="grid grid-cols-2 gap-md pt-sm border-t border-[#c6dafc]">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Tiempo transcurrido</p>
+<p class="font-body-lg text-body-lg font-semibold text-primary">2h 15m</p>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Patente</p>
+<p class="font-body-lg text-body-lg font-semibold text-primary">AB-CD-12</p>
+</div>
+</div>
+</section>
+<!-- Digital Credential Action Card -->
+<button class="w-full bg-primary-container text-white rounded-card p-xl flex flex-col items-center justify-center space-y-md active:scale-95 transition-transform shadow-lg relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
+<div class="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-sm nfc-wave">
+<span class="material-symbols-outlined text-white text-[48px]" data-icon="contactless">contactless</span>
+</div>
+<div class="text-center">
+<h3 class="font-headline-md text-headline-md text-white">Credencial NFC Digital</h3>
+<p class="font-body-md text-body-md text-on-primary-container opacity-90 mt-xs">Toca para abrir la barrera</p>
+</div>
+<!-- Decorative wave element -->
+<div class="absolute -bottom-8 -right-8 w-32 h-32 bg-secondary opacity-20 rounded-full blur-3xl group-hover:opacity-40 transition-opacity"></div>
+</button>
+<!-- Secondary Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Quick Map Card -->
+<button class="bg-surface-container-lowest border border-surface-container-highest rounded-card p-lg flex flex-col justify-between items-start min-h-[160px] shadow-[0_4px_20px_rgba(0,51,102,0.08)] active:scale-95 transition-transform group">
+<div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary mb-md group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="map">map</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-primary">Ver Mapa de Ocupación</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-xs">Busca espacios libres en tiempo real</p>
+</div>
+</button>
+<!-- Vehicles Card -->
+<button class="bg-surface-container-lowest border border-surface-container-highest rounded-card p-lg flex flex-col justify-between items-start min-h-[160px] shadow-[0_4px_20px_rgba(0,51,102,0.08)] active:scale-95 transition-transform group">
+<div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary mb-md group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="directions_car">directions_car</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-primary">Mis Vehículos</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-xs">Gestiona tus patentes registradas</p>
+</div>
+</button>
+</div>
+<!-- Emergency / Help Section -->
+<section class="pt-md pb-xl">
+<button class="w-full bg-white border-2 border-error-container rounded-card p-md flex items-center gap-md active:scale-[0.98] transition-transform">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="warning" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="text-left">
+<h4 class="font-label-lg text-label-lg text-error font-bold">Reportar Auto Bloqueado</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Asistencia inmediata de seguridad</p>
+</div>
+<span class="material-symbols-outlined ml-auto text-outline" data-icon="chevron_right">chevron_right</span>
+</button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-xs bg-surface-container-lowest rounded-t-xl shadow-[0_-4px_20px_rgba(0,51,102,0.08)]">
+<!-- Inicio (Active) -->
+<a class="flex flex-col items-center justify-center text-primary-container font-bold hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-sm text-label-sm mt-1">Inicio</span>
+</a>
+<!-- Mapa -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="map">map</span>
+<span class="font-label-sm text-label-sm mt-1">Mapa</span>
+</a>
+<!-- Historial -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label-sm text-label-sm mt-1">Historial</span>
+</a>
+<!-- Perfil -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm mt-1">Perfil</span>
+</a>
+</nav>
+<script>
+        // Simple micro-interaction for the NFC button
+        document.querySelector('.group').addEventListener('click', function() {
+            const originalColor = this.style.backgroundColor;
+            this.classList.add('ring-4', 'ring-secondary-container');
+            setTimeout(() => {
+                this.classList.remove('ring-4', 'ring-secondary-container');
+            }, 300);
+        });
+    </script>
+</body></html>
