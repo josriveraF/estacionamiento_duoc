@@ -1,123 +1,378 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 
+// --- MOCK DATA PARA LA VALIDACIÓN ---
+const MOCK_SPOTS = [
+  { id: 'A-01', status: 'available' },
+  { id: 'A-02', status: 'available' },
+  { id: 'A-03', status: 'occupied' }, // Ocupado
+  { id: 'A-04', status: 'available' },
+  { id: 'B-01', status: 'occupied' }, // Ocupado
+  { id: 'B-02', status: 'available' },
+  { id: 'B-03', status: 'available' },
+  { id: 'B-04', status: 'available' },
+];
+
 function App() {
+  // --- ESTADOS DE LA APLICACIÓN ---
+  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'register_map', 'report_block', 'reserve_map', 'reserve_time'
+  const [parkedSpot, setParkedSpot] = useState(null); 
+  const [reservedSpot, setReservedSpot] = useState(null); // Espacio reservado con anticipación
+  const [selectedSpotForReservation, setSelectedSpotForReservation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isInside, setIsInside] = useState(false);
+
+  // --- HANDLERS ---
+  const handleSimulateNFC = () => {
+    setIsInside(true);
+    if (reservedSpot) {
+      // Si tenía reserva y entró, se le asigna automáticamente
+      setParkedSpot(reservedSpot.id);
+      setReservedSpot(null);
+      alert(`¡Bienvenido! Has ingresado y tu reserva en el cupo ${reservedSpot.id} se ha activado.`);
+      setCurrentView('dashboard');
+    } else {
+      setCurrentView('register_map');
+    }
+  };
+
+  const handleSelectSpotToPark = (spotId) => {
+    setErrorMsg('');
+    const spot = MOCK_SPOTS.find(s => s.id === spotId);
+    
+    if (spot && spot.status === 'occupied') {
+      setErrorMsg('El espacio ya se encuentra ocupado. Por favor, seleccione el número correcto.');
+      return;
+    }
+    setParkedSpot(spotId);
+    setCurrentView('dashboard');
+  };
+
+  const handleSelectSpotToReserve = (spotId) => {
+    setErrorMsg('');
+    const spot = MOCK_SPOTS.find(s => s.id === spotId);
+    
+    if (spot && spot.status === 'occupied') {
+      setErrorMsg('Este espacio ya está ocupado y no puede ser reservado.');
+      return;
+    }
+    
+    setSelectedSpotForReservation(spotId);
+    setCurrentView('reserve_time'); // Pasar a la selección de tiempo
+  };
+
+  const handleConfirmReservation = (timeSelection) => {
+    setReservedSpot({ id: selectedSpotForReservation, time: timeSelection });
+    setSelectedSpotForReservation(null);
+    setCurrentView('dashboard');
+    alert(`¡Reserva confirmada en el espacio ${selectedSpotForReservation}!`);
+  };
+
+  const handleCancelReservation = () => {
+    setReservedSpot(null);
+    alert('Tu reserva ha sido cancelada.');
+  };
+
+  const handleReportBlocked = (e) => {
+    e.preventDefault();
+    alert('Alerta enviada al guardia y al conductor del vehículo que bloquea.');
+    setCurrentView('dashboard');
+  };
+
+  const handleLeaveParking = () => {
+    setParkedSpot(null);
+    setIsInside(false);
+    alert('Salida NFC detectada. Espacio liberado automáticamente.');
+  };
+
+  // --- COMPONENTE DE MAPA REUTILIZABLE ---
+  const MapGrid = ({ onSelectSpot, isForReservation }) => (
+    <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+      <div className="flex justify-between items-center mb-6">
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sector A & B</span>
+        <span className="flex items-center gap-1 text-xs font-bold text-green-600">
+          <div className="w-2 h-2 rounded-full bg-green-500"></div> Libres
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        {MOCK_SPOTS.map((spot) => (
+          <button
+            key={spot.id}
+            onClick={() => onSelectSpot(spot.id)}
+            className={`relative h-20 rounded-xl border-2 flex items-center justify-center transition-all active:scale-95
+              ${spot.status === 'occupied' 
+                ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' 
+                : 'bg-white border-blue-200 hover:border-blue-500 hover:bg-blue-50 shadow-sm'}
+            `}
+          >
+            <span className={`text-xl font-black ${spot.status === 'occupied' ? 'text-gray-400' : 'text-[#003366]'}`}>
+              {spot.id}
+            </span>
+            {spot.status === 'occupied' && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-gray-400 text-4xl opacity-20" data-icon="directions_car">directions_car</span>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+      {isForReservation && (
+        <div className="mt-6 p-3 bg-blue-50 rounded-lg text-xs text-[#003366] text-center font-medium">
+          Toca un espacio libre para reservarlo con anticipación.
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <>
-      {/* TopAppBar */}
-      <header className="w-full top-0 sticky z-50 bg-surface flex justify-between items-center px-margin-mobile py-sm">
-        <div className="flex items-center gap-sm">
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed">
-            <img 
-              alt="Profile" 
-              className="w-full h-full object-cover" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAglRFl50gdUGzbFTUNsM-0M1K_3OCz5odj6831z0NN0bb3PoWu7idQqcEa2XhxSlGewQFNINhK2zOd6sxQ38W_HQqeGEVegHzpCbdRL7u0aI2aagZFV17lG-bsHc5nUgWyP6R2Ei_hTT_wYVZNJIUPXMgOcKW6NFaoi9J-q6ZvpT3s1pZ4pbCIc2JJ4_fvzCss0jry91tM7aA7OXrXcRtdJGuj6cUGUALtq3fsAOjfiqvZ3L7M_JplPtrO0VOnzMSSiMxQnD-NOFM" 
-            />
-          </div>
-          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Hola, Estudiante</h1>
-        </div>
-        <button className="active:scale-95 transition-transform duration-200 hover:opacity-80">
-          <span className="material-symbols-outlined text-primary text-[28px]" data-icon="notifications">notifications</span>
-        </button>
-      </header>
-
-      <main className="px-margin-mobile mt-lg space-y-lg">
-        {/* Status Card */}
-        <section className="bg-[#e7f0fe] rounded-card p-lg shadow-[0_4px_20px_rgba(0,51,102,0.08)] border border-[#d0e1fd]">
-          <div className="flex justify-between items-start mb-md">
-            <div>
-              <span className="font-label-sm text-label-sm text-on-primary-fixed-variant uppercase tracking-wider">Estado Actual</span>
-              <h2 className="font-headline-sm text-headline-sm text-primary mt-base">Estacionado en Espacio B-12</h2>
+    <div className="flex justify-center bg-gray-900 min-h-screen">
+      <div className="w-full max-w-[400px] bg-[#f8faff] min-h-screen shadow-2xl relative flex flex-col font-sans">
+        
+        {/* TopAppBar */}
+        <header className="w-full top-0 sticky z-50 bg-[#f8faff] flex justify-between items-center px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-[#003366] flex items-center justify-center text-[#003366] font-bold text-lg shadow-sm">
+              J
             </div>
-            <div className="bg-secondary-container text-on-secondary-container px-sm py-xs rounded-full font-label-sm text-label-sm font-bold">
-              ACTIVO
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Bienvenido,</span>
+              <h1 className="text-xl font-bold text-[#003366] leading-none mt-0.5">José Rivera</h1>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-md pt-sm border-t border-[#c6dafc]">
-            <div>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Tiempo transcurrido</p>
-              <p className="font-body-lg text-body-lg font-semibold text-primary">2h 15m</p>
-            </div>
-            <div>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Patente</p>
-              <p className="font-body-lg text-body-lg font-semibold text-primary">AB-CD-12</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Digital Credential Action Card */}
-        <button className="w-full bg-primary-container text-white rounded-card p-xl flex flex-col items-center justify-center space-y-md active:scale-95 transition-transform shadow-lg relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
-          <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-sm nfc-wave">
-            <span className="material-symbols-outlined text-white text-[48px]" data-icon="contactless">contactless</span>
-          </div>
-          <div className="text-center">
-            <h3 className="font-headline-md text-headline-md text-white">Credencial NFC Digital</h3>
-            <p className="font-body-md text-body-md text-on-primary-container opacity-90 mt-xs">Toca para abrir la barrera</p>
-          </div>
-          <div className="absolute -bottom-8 -right-8 w-32 h-32 bg-secondary opacity-20 rounded-full blur-3xl group-hover:opacity-40 transition-opacity"></div>
-        </button>
-
-        {/* Secondary Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-          {/* Quick Map Card */}
-          <button className="bg-surface-container-lowest border border-surface-container-highest rounded-card p-lg flex flex-col justify-between items-start min-h-[160px] shadow-[0_4px_20px_rgba(0,51,102,0.08)] active:scale-95 transition-transform group">
-            <div className="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary mb-md group-hover:bg-primary group-hover:text-white transition-colors">
-              <span className="material-symbols-outlined" data-icon="map">map</span>
-            </div>
-            <div>
-              <h4 className="font-headline-sm text-headline-sm text-primary">Ver Mapa de Ocupación</h4>
-              <p className="font-label-sm text-label-sm text-on-surface-variant mt-xs">Busca espacios libres en tiempo real</p>
-            </div>
+          <button className="active:scale-95 transition-transform duration-200">
+            <span className="material-symbols-outlined text-[#003366] text-3xl" data-icon="notifications">notifications</span>
           </button>
+        </header>
 
-          {/* Vehicles Card */}
-          <button className="bg-surface-container-lowest border border-surface-container-highest rounded-card p-lg flex flex-col justify-between items-start min-h-[160px] shadow-[0_4px_20px_rgba(0,51,102,0.08)] active:scale-95 transition-transform group">
-            <div className="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center text-primary mb-md group-hover:bg-primary group-hover:text-white transition-colors">
-              <span className="material-symbols-outlined" data-icon="directions_car">directions_car</span>
-            </div>
-            <div>
-              <h4 className="font-headline-sm text-headline-sm text-primary">Mis Vehículos</h4>
-              <p className="font-label-sm text-label-sm text-on-surface-variant mt-xs">Gestiona tus patentes registradas</p>
-            </div>
-          </button>
-        </div>
+        <main className="flex-1 overflow-y-auto px-6 pt-6 pb-24">
+          
+          {/* VISTA 1: DASHBOARD PRINCIPAL */}
+          {currentView === 'dashboard' && (
+            <div className="space-y-6">
+              
+              {/* Tarjeta de Estado Condicional */}
+              {parkedSpot ? (
+                // Ya estacionado
+                <section className="bg-[#e7f0fe] rounded-2xl p-6 shadow-sm border border-[#d0e1fd] animate-slideUp">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <span className="text-xs text-[#405a8b] font-bold uppercase tracking-wider">Estado Actual</span>
+                      <h2 className="text-2xl text-[#003366] font-bold mt-1">Estacionado en <span className="text-blue-600">{parkedSpot}</span></h2>
+                    </div>
+                    <div className="bg-[#b3d4ff] text-[#003366] px-3 py-1 rounded-full text-xs font-bold animate-pulse">ACTIVO</div>
+                  </div>
+                  <button onClick={handleLeaveParking} className="mt-4 w-full py-2 bg-white text-red-600 font-bold rounded-xl border border-red-200 hover:bg-red-50 transition">
+                    Simular Salida NFC (Liberar)
+                  </button>
+                </section>
 
-        {/* Emergency / Help Section */}
-        <section className="pt-md pb-xl">
-          <button className="w-full bg-white border-2 border-error-container rounded-card p-md flex items-center gap-md active:scale-[0.98] transition-transform">
-            <div className="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
-              <span className="material-symbols-outlined" data-icon="warning" style={{fontVariationSettings: "'FILL' 1"}}>warning</span>
-            </div>
-            <div className="text-left">
-              <h4 className="font-label-lg text-label-lg text-error font-bold">Reportar Auto Bloqueado</h4>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Asistencia inmediata de seguridad</p>
-            </div>
-            <span className="material-symbols-outlined ml-auto text-outline" data-icon="chevron_right">chevron_right</span>
-          </button>
-        </section>
-      </main>
+              ) : reservedSpot ? (
+                // Tiene reserva pero no ha entrado
+                <section className="bg-amber-50 rounded-2xl p-6 shadow-sm border border-amber-200 animate-slideUp">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <span className="text-xs text-amber-700 font-bold uppercase tracking-wider">Reserva Anticipada</span>
+                      <h2 className="text-2xl text-amber-900 font-bold mt-1">Cupo Reservado: <span className="text-amber-600">{reservedSpot.id}</span></h2>
+                      <p className="text-sm text-amber-700 mt-1">Tiempo: {reservedSpot.time}</p>
+                    </div>
+                    <div className="bg-amber-200 text-amber-800 px-3 py-1 rounded-full text-xs font-bold">ESPERANDO</div>
+                  </div>
+                  <div className="flex gap-3 mt-4">
+                    <button 
+                      onClick={handleSimulateNFC}
+                      className="flex-1 py-3 bg-[#003366] text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform text-sm"
+                    >
+                      Llegué (Ingreso NFC)
+                    </button>
+                    <button 
+                      onClick={handleCancelReservation}
+                      className="py-3 px-4 bg-white text-red-600 font-bold rounded-xl border border-red-200 hover:bg-red-50 transition text-sm"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </section>
 
-      {/* BottomNavBar */}
-      <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-gutter-mobile py-xs bg-surface-container-lowest rounded-t-xl shadow-[0_-4px_20px_rgba(0,51,102,0.08)]">
-        <a className="flex flex-col items-center justify-center text-primary-container font-bold hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
-          <span className="material-symbols-outlined" data-icon="home" style={{fontVariationSettings: "'FILL' 1"}}>home</span>
-          <span className="font-label-sm text-label-sm mt-1">Inicio</span>
-        </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
-          <span className="material-symbols-outlined" data-icon="map">map</span>
-          <span className="font-label-sm text-label-sm mt-1">Mapa</span>
-        </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
-          <span className="material-symbols-outlined" data-icon="history">history</span>
-          <span className="font-label-sm text-label-sm mt-1">Historial</span>
-        </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors px-md py-xs rounded-xl active:scale-90 transition-transform duration-150" href="#">
-          <span className="material-symbols-outlined" data-icon="person">person</span>
-          <span className="font-label-sm text-label-sm mt-1">Perfil</span>
-        </a>
-      </nav>
-    </>
+              ) : (
+                // No estacionado ni reservado
+                <section className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 text-center animate-fadeIn">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="material-symbols-outlined text-gray-400 text-3xl" data-icon="directions_car">directions_car</span>
+                  </div>
+                  <h2 className="text-xl text-[#003366] font-bold">Sin estacionamiento activo</h2>
+                  <p className="text-sm text-gray-500 mt-2 mb-4">Ingresa al recinto usando tu NFC para iniciar.</p>
+                  <button 
+                    onClick={handleSimulateNFC}
+                    className="w-full bg-[#003366] text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-transform"
+                  >
+                    Simular Ingreso con NFC
+                  </button>
+                </section>
+              )}
+
+              {/* Botón Credencial NFC */}
+              <button className="w-full bg-[#003366] text-white rounded-2xl p-6 flex flex-col items-center justify-center active:scale-95 transition-transform shadow-lg relative overflow-hidden group">
+                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-3">
+                  <span className="material-symbols-outlined text-white text-4xl animate-pulse" data-icon="contactless">contactless</span>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-lg font-bold">Credencial NFC Digital</h3>
+                  <p className="text-sm text-blue-200 mt-1">Acerca al lector de la barrera</p>
+                </div>
+              </button>
+
+              {/* Sección de Doble Fila (solo si está estacionado) */}
+              {parkedSpot && (
+                <section className="pt-4">
+                  <button 
+                    onClick={() => setCurrentView('report_block')}
+                    className="w-full bg-white border-2 border-red-100 rounded-2xl p-4 flex items-center gap-4 active:scale-[0.98] transition-transform shadow-sm"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                      <span className="material-symbols-outlined" data-icon="warning">warning</span>
+                    </div>
+                    <div className="text-left flex-1">
+                      <h4 className="text-base text-red-600 font-bold leading-tight">Reportar Auto Bloqueado</h4>
+                      <p className="text-xs text-gray-500 mt-1">Notificar por doble fila</p>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                  </button>
+                </section>
+              )}
+            </div>
+          )}
+
+          {/* VISTA 2: MAPA PARA REGISTRO MANUAL AL ENTRAR (SIN RESERVA) */}
+          {currentView === 'register_map' && (
+            <div className="space-y-6 animate-slideUp">
+              <div>
+                <h2 className="text-2xl font-bold text-[#003366]">Registrar Ubicación</h2>
+                <p className="text-sm text-gray-600 mt-1">Detectamos tu ingreso. Toca el número del cajón donde estacionaste.</p>
+              </div>
+
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex gap-3 animate-shake">
+                  <span className="material-symbols-outlined text-red-500 mt-0.5" data-icon="error">error</span>
+                  <p className="text-sm text-red-800 font-medium">{errorMsg}</p>
+                </div>
+              )}
+
+              <MapGrid onSelectSpot={handleSelectSpotToPark} isForReservation={false} />
+
+              <button onClick={() => setCurrentView('dashboard')} className="w-full py-3 text-[#003366] font-bold">Cancelar</button>
+            </div>
+          )}
+
+          {/* VISTA 3: MAPA PARA RESERVA ANTICIPADA */}
+          {currentView === 'reserve_map' && (
+            <div className="space-y-6 animate-slideUp">
+              <div>
+                <h2 className="text-2xl font-bold text-[#003366]">Reserva Anticipada</h2>
+                <p className="text-sm text-gray-600 mt-1">Visualiza los espacios disponibles y reserva el tuyo antes de llegar.</p>
+              </div>
+
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex gap-3 animate-shake">
+                  <span className="material-symbols-outlined text-red-500 mt-0.5" data-icon="error">error</span>
+                  <p className="text-sm text-red-800 font-medium">{errorMsg}</p>
+                </div>
+              )}
+
+              <MapGrid onSelectSpot={handleSelectSpotToReserve} isForReservation={true} />
+            </div>
+          )}
+
+          {/* VISTA 4: CONFIGURACIÓN DE TIEMPO DE RESERVA */}
+          {currentView === 'reserve_time' && (
+            <div className="space-y-6 animate-slideUp">
+              <div>
+                <h2 className="text-2xl font-bold text-[#003366]">Configurar Reserva</h2>
+                <p className="text-sm text-gray-600 mt-1">Estás reservando el espacio <span className="font-bold text-[#003366]">{selectedSpotForReservation}</span>.</p>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-[#003366] mb-2 uppercase tracking-wide">¿Cuánto tiempo estarás?</h3>
+                
+                <button onClick={() => handleConfirmReservation('1 Hora')} className="w-full py-4 px-4 bg-gray-50 border border-gray-200 rounded-xl text-left font-bold text-[#003366] hover:bg-blue-50 hover:border-blue-300 transition">
+                  ⏱️ Estadía Corta (1 Hora)
+                </button>
+                <button onClick={() => handleConfirmReservation('4 Horas')} className="w-full py-4 px-4 bg-gray-50 border border-gray-200 rounded-xl text-left font-bold text-[#003366] hover:bg-blue-50 hover:border-blue-300 transition">
+                  ⏳ Medio Día (4 Horas)
+                </button>
+                <button onClick={() => handleConfirmReservation('Toda la jornada')} className="w-full py-4 px-4 bg-gray-50 border border-gray-200 rounded-xl text-left font-bold text-[#003366] hover:bg-blue-50 hover:border-blue-300 transition">
+                  🏢 Toda la jornada
+                </button>
+                <button onClick={() => handleConfirmReservation('Sin horario fijo')} className="w-full py-4 px-4 bg-white border-2 border-dashed border-gray-300 rounded-xl text-left font-bold text-gray-500 hover:border-[#003366] hover:text-[#003366] transition">
+                  ❓ Sin horario fijo (No lo sé)
+                </button>
+              </div>
+
+              <button onClick={() => setCurrentView('reserve_map')} className="w-full py-3 text-gray-500 font-bold hover:text-gray-800">
+                Atrás
+              </button>
+            </div>
+          )}
+
+          {/* VISTA 5: REPORTE DE DOBLE FILA */}
+          {currentView === 'report_block' && (
+            <div className="space-y-6 animate-slideUp">
+              <div>
+                <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2">
+                  <span className="material-symbols-outlined">warning</span> Auto Bloqueado
+                </h2>
+                <p className="text-sm text-gray-600 mt-2">Ingresa la patente del vehículo que te bloquea para notificarle.</p>
+              </div>
+
+              <form onSubmit={handleReportBlocked} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-[#003366] mb-2">Mi Ubicación</label>
+                  <input type="text" value={parkedSpot || ''} disabled className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-gray-500 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-[#003366] mb-2">Patente infractor</label>
+                  <input type="text" placeholder="Ej: XX-YY-99" required className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 font-bold text-lg uppercase focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500" />
+                </div>
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4">
+                  Notificar al Conductor
+                </button>
+              </form>
+              <button onClick={() => setCurrentView('dashboard')} className="w-full py-3 text-gray-500 font-bold">Cancelar</button>
+            </div>
+          )}
+
+        </main>
+
+        {/* BottomNavBar */}
+        {(currentView === 'dashboard' || currentView === 'reserve_map') && (
+          <nav className="absolute bottom-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-white rounded-t-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-gray-100">
+            <button 
+              onClick={() => setCurrentView('dashboard')}
+              className={`flex flex-col items-center font-bold p-2 transition-colors ${currentView === 'dashboard' ? 'text-[#003366]' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: currentView === 'dashboard' ? "'FILL' 1" : "'FILL' 0"}}>home</span>
+              <span className="text-[10px] mt-1">Inicio</span>
+            </button>
+            <button 
+              onClick={() => {
+                if(!parkedSpot) setCurrentView('reserve_map'); // Solo deja reservar si no está estacionado
+              }}
+              className={`flex flex-col items-center font-bold p-2 transition-colors ${currentView === 'reserve_map' ? 'text-[#003366]' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: currentView === 'reserve_map' ? "'FILL' 1" : "'FILL' 0"}}>map</span>
+              <span className="text-[10px] mt-1">Reservar</span>
+            </button>
+            <button className="flex flex-col items-center text-gray-400 hover:text-gray-600 transition p-2">
+              <span className="material-symbols-outlined text-2xl">history</span>
+              <span className="text-[10px] mt-1">Historial</span>
+            </button>
+            <button className="flex flex-col items-center text-gray-400 hover:text-gray-600 transition p-2">
+              <span className="material-symbols-outlined text-2xl">person</span>
+              <span className="text-[10px] mt-1">Perfil</span>
+            </button>
+          </nav>
+        )}
+      </div>
+    </div>
   );
 }
 
