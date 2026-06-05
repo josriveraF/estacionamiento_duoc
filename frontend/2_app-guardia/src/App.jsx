@@ -1,12 +1,60 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { Search, Map as MapIcon, Bell, Settings, LayoutGrid, AlertTriangle, ShieldAlert, BadgeCheck, DoorOpen } from 'lucide-react';
-import { createInitialSpaces } from './data';
+import { createInitialSpaces, calculateStats } from './data';
 import Parking2D from './components/Parking2D';
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [spaces, setSpaces] = useState(() => createInitialSpaces());
   const [selectedSpaceId, setSelectedSpaceId] = useState(null);
+  const [incidentes, setIncidentes] = useState([]);
+  
+  const stats = calculateStats(spaces);
+
+  // --- SUPABASE REALTIME SYNC ---
+  React.useEffect(() => {
+    const fetchSpaces = async () => {
+      const { data } = await supabase.from('espacios').select('*');
+      if (data) {
+        setSpaces(prev => prev.map(s => {
+          const dbSpot = data.find(d => d.id === s.id);
+          if (dbSpot) {
+             const statusMap = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+             return { ...s, status: statusMap[dbSpot.estado] || 'available' };
+          }
+          return s;
+        }));
+      }
+    };
+    fetchSpaces();
+
+    const fetchIncidentes = async () => {
+      const { data } = await supabase.from('incidentes').select('*').order('fecha_reporte', { ascending: false });
+      if (data) {
+        setIncidentes(data);
+      }
+    };
+    fetchIncidentes();
+
+    const channelSpaces = supabase.channel('realtime-guardia-spaces')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'espacios' }, (payload) => {
+         const dbSpot = payload.new;
+         const statusMap = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+         setSpaces(prev => prev.map(s => s.id === dbSpot.id ? { ...s, status: statusMap[dbSpot.estado] || 'available' } : s));
+      })
+      .subscribe();
+
+    const channelIncidentes = supabase.channel('realtime-guardia-incidentes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidentes' }, () => {
+         fetchIncidentes();
+      })
+      .subscribe();
+      
+    return () => { 
+      supabase.removeChannel(channelSpaces); 
+      supabase.removeChannel(channelIncidentes); 
+    };
+  }, []);
 
   return (
     <div className="flex bg-[#0b0c10] min-h-screen font-sans text-white">
@@ -98,7 +146,7 @@ function App() {
                   <div className="bg-[#1e293b] rounded-2xl p-8 flex items-center justify-between border border-gray-700 shadow-lg">
                     <div>
                       <p className="text-gray-400 text-sm tracking-widest mb-2">CAPACIDAD TOTAL</p>
-                      <p className="text-6xl font-bold text-[#facc15]">85%</p>
+                      <p className="text-6xl font-bold text-[#facc15]">{stats.occupancyRate}%</p>
                     </div>
                     <div className="w-28 h-28 rounded-full border-8 border-[#facc15] border-t-gray-700 transform rotate-45"></div>
                   </div>
@@ -107,11 +155,11 @@ function App() {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="bg-[#1e293b] rounded-2xl p-6 border border-gray-700 shadow-lg">
                       <p className="text-gray-400 text-sm tracking-widest mb-2">CUPOS LIBRES</p>
-                      <p className="text-5xl font-bold text-blue-300">12</p>
+                      <p className="text-5xl font-bold text-blue-300">{stats.available}</p>
                     </div>
                     <div className="bg-[#1e293b] rounded-2xl p-6 border border-gray-700 shadow-lg">
                       <p className="text-gray-400 text-sm tracking-widest mb-2">ESPECIALES</p>
-                      <p className="text-5xl font-bold text-gray-200">3 <span className="text-xl font-normal text-gray-400">en uso</span></p>
+                      <p className="text-5xl font-bold text-gray-200">{stats.disabledOccupied + stats.evOccupied} <span className="text-xl font-normal text-gray-400">en uso</span></p>
                     </div>
                   </div>
 
@@ -135,27 +183,24 @@ function App() {
                   </h3>
                   
                   <div className="bg-[#111318] rounded-2xl border border-gray-800 p-6 flex-1 space-y-4 shadow-inner">
-                    <div className="bg-[#7f1d1d] rounded-xl p-5 border border-red-500 flex gap-5 items-center shadow-lg">
-                      <div className="bg-red-200/20 p-3 rounded-lg text-red-200">
-                        <ShieldAlert size={28} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold tracking-widest text-red-200 mb-1">CRÍTICO</p>
-                        <p className="text-lg text-red-100">Doble fila detectada en sector B</p>
-                        <p className="text-xs text-red-300 mt-2">Hace 2 minutos</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#1e293b] rounded-xl p-5 border-l-4 border-l-[#facc15] flex gap-5 items-center shadow-md">
-                      <div className="text-[#facc15]">
-                        <AlertTriangle size={28} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold tracking-widest text-[#facc15] mb-1">ADVERTENCIA</p>
-                        <p className="text-lg text-gray-300">Auto no registrado en barrera principal</p>
-                        <p className="text-xs text-gray-500 mt-2">Hace 15 minutos</p>
-                      </div>
-                    </div>
+                    {incidentes.length === 0 ? (
+                      <p className="text-gray-500 text-center mt-4">No hay alertas activas.</p>
+                    ) : (
+                      incidentes.map(inc => (
+                        <div key={inc.id} className="bg-[#7f1d1d] rounded-xl p-5 border border-red-500 flex gap-5 items-center shadow-lg">
+                          <div className="bg-red-200/20 p-3 rounded-lg text-red-200">
+                            <ShieldAlert size={28} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold tracking-widest text-red-200 mb-1">CRÍTICO</p>
+                            <p className="text-lg text-red-100">{inc.patente_infractor === 'Doble Fila' ? 'Doble fila detectada' : 'Alerta'} en {inc.espacio_id ? `plaza ${inc.espacio_id}` : 'sector general'}</p>
+                            <p className="text-xs text-red-300 mt-2">
+                              {new Date(inc.fecha_reporte).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

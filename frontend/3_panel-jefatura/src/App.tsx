@@ -14,6 +14,7 @@ import {
   Sparkles, Car as CarIcon, Accessibility, Zap, 
   MapPin, CheckCircle, Info, Flame, RotateCcw
 } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 interface EventLog {
   id: string;
@@ -63,28 +64,55 @@ export default function App() {
     setLogs(prev => [newLog, ...prev.slice(0, 49)]); // keep last 50
   }, []);
 
+  // --- SUPABASE REALTIME SYNC ---
+  useEffect(() => {
+    const fetchSpaces = async () => {
+      const { data } = await supabase.from('espacios').select('*');
+      if (data) {
+        setSpaces(prev => prev.map(s => {
+          const dbSpot = data.find(d => d.id === s.id);
+          if (dbSpot) {
+             const statusMap: any = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+             return { ...s, status: statusMap[dbSpot.estado] || 'available' };
+          }
+          return s;
+        }));
+      }
+    };
+    fetchSpaces();
+
+    const channel = supabase.channel('realtime-jefatura')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'espacios' }, (payload) => {
+         const dbSpot = payload.new as any;
+         const statusMap: any = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+         setSpaces(prev => prev.map(s => s.id === dbSpot.id ? { ...s, status: statusMap[dbSpot.estado] || 'available' } : s));
+      })
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // --- INTERACTION HANDLERS ---
   const handleSelectSpace = useCallback((space: ParkingSpace) => {
     setSelectedSpaceId(space.id);
   }, []);
 
-  const handleParkCar = useCallback((spaceId: string, car: Car) => {
+  const handleParkCar = useCallback(async (spaceId: string, car: Car) => {
+    // Update local immediately for UI responsiveness
     setSpaces(prevSpaces => 
       prevSpaces.map(space => {
         if (space.id === spaceId) {
-          return {
-            ...space,
-            status: 'occupied',
-            occupiedBy: car,
-          };
+          return { ...space, status: 'occupied', occupiedBy: car };
         }
         return space;
       })
     );
     addLog(`🚗 Vehículo estacionado en ${spaceId}: ${car.brandModel} [${car.licensePlate}] (${car.ownerName})`, 'park');
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Ocupado' }).eq('id', spaceId);
   }, [addLog]);
 
-  const handleUnparkCar = useCallback((spaceId: string) => {
+  const handleUnparkCar = useCallback(async (spaceId: string) => {
     let unparkedCarInfo = '';
     setSpaces(prevSpaces => 
       prevSpaces.map(space => {
@@ -92,16 +120,14 @@ export default function App() {
           if (space.occupiedBy) {
             unparkedCarInfo = `${space.occupiedBy.brandModel} [${space.occupiedBy.licensePlate}]`;
           }
-          return {
-            ...space,
-            status: 'available',
-            occupiedBy: null,
-          };
+          return { ...space, status: 'available', occupiedBy: null };
         }
         return space;
       })
     );
     addLog(`💸 Vehículo egresó de la plaza ${spaceId}: ${unparkedCarInfo}`, 'unpark');
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Libre' }).eq('id', spaceId);
   }, [addLog]);
 
   const handleChangeSpaceType = useCallback((spaceId: string, type: ParkingSpaceType) => {
@@ -111,7 +137,6 @@ export default function App() {
           return {
             ...space,
             type,
-            // If we mark it reserved, toggle availability status if unoccupied
             status: type === 'reserved' && space.status === 'available' ? 'reserved' : (space.status === 'reserved' ? 'available' : space.status)
           };
         }
@@ -128,25 +153,22 @@ export default function App() {
     addLog(`🔧 Categoría del espacio ${spaceId} modificada a: ${typeNames[type]}`, 'type_change');
   }, [addLog]);
 
-  const handleReserveSpace = useCallback((spaceId: string) => {
+  const handleReserveSpace = useCallback(async (spaceId: string) => {
+    let nextStatus = 'available';
     setSpaces(prevSpaces => 
       prevSpaces.map(space => {
         if (space.id === spaceId) {
-          const nextStatus = space.status === 'reserved' ? 'available' : 'reserved';
-          return {
-            ...space,
-            status: nextStatus,
-          };
+          nextStatus = space.status === 'reserved' ? 'available' : 'reserved';
+          return { ...space, status: nextStatus as any };
         }
         return space;
       })
     );
-    const space = spaces.find(s => s.id === spaceId);
-    if (space) {
-      const isReserving = space.status !== 'reserved';
-      addLog(isReserving ? `🎟️ Espacio ${spaceId} reservado temporalmente por administración.` : `🔓 Reserva cancelada. Espacio ${spaceId} vuelto a colocar libre.`, 'system');
-    }
-  }, [spaces, addLog]);
+    
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: nextStatus === 'reserved' ? 'Reservado' : 'Libre' }).eq('id', spaceId);
+    addLog(nextStatus === 'reserved' ? `🎟️ Espacio ${spaceId} reservado temporalmente por administración.` : `🔓 Reserva cancelada. Espacio ${spaceId} vuelto a colocar libre.`, 'system');
+  }, [addLog]);
 
   // --- AUTOMATED BACKGROUND SIMULATION TICKER ---
   useEffect(() => {

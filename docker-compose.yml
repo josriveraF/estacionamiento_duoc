@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  app-conductor:
+    build:
+      context: ./frontend/1_app-conductor
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    container_name: app-conductor-prod
+
+  app-guardia:
+    build:
+      context: ./frontend/2_app-guardia
+    ports:
+      - "8082:80"
+    restart: unless-stopped
+    container_name: app-guardia-prod
+
+  panel-jefatura:
+    build:
+      context: ./frontend/3_panel-jefatura
+    ports:
+      - "8083:80"
+    restart: unless-stopped
+    container_name: panel-jefatura-prod
+
+  vista-superadmin:
+    build:
+      context: ./frontend/4_vista-superadmin
+    ports:
+      - "8084:80"
+    restart: unless-stopped
+    container_name: vista-superadmin-prod

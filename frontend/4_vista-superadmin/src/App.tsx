@@ -32,6 +32,7 @@ import {
   Wrench, ClipboardList, ShieldCheck, ServerCrash, 
   SlidersHorizontal, Radio, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 interface EventLog {
   id: string;
@@ -140,13 +141,41 @@ export default function App() {
     return spaces.find(s => s.id === selectedSpaceId) || null;
   }, [spaces, selectedSpaceId]);
 
+  // --- SUPABASE REALTIME SYNC ---
+  useEffect(() => {
+    const fetchSpaces = async () => {
+      const { data } = await supabase.from('espacios').select('*');
+      if (data) {
+        setSpaces(prev => prev.map(s => {
+          const dbSpot = data.find(d => d.id === s.id);
+          if (dbSpot) {
+             const statusMap: any = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+             return { ...s, status: statusMap[dbSpot.estado] || 'available', sensorDesynced: dbSpot.sensor_desincronizado || false };
+          }
+          return s;
+        }));
+      }
+    };
+    fetchSpaces();
+
+    const channel = supabase.channel('realtime-superadmin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'espacios' }, (payload) => {
+         const dbSpot = payload.new as any;
+         const statusMap: any = { 'Libre': 'available', 'Ocupado': 'occupied', 'Reservado': 'reserved' };
+         setSpaces(prev => prev.map(s => s.id === dbSpot.id ? { ...s, status: statusMap[dbSpot.estado] || 'available', sensorDesynced: dbSpot.sensor_desincronizado || false } : s));
+      })
+      .subscribe();
+      
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
 
   // --- INTERACTION HANDLERS ---
   const handleSelectSpace = useCallback((space: ParkingSpace) => {
     setSelectedSpaceId(space.id);
   }, []);
 
-  const handleParkCar = useCallback((spaceId: string, car: Car) => {
+  const handleParkCar = useCallback(async (spaceId: string, car: Car) => {
     if (blockNewEntries) {
       addLog(`❌ Rechazo de ingreso: El acceso principal está cerrado por sobrecupo. No se puede estacionar en ${spaceId}`, 'system');
       return;
@@ -167,10 +196,13 @@ export default function App() {
     );
     setFlowCounters(f => ({ ...f, entered: f.entered + 1 }));
     addLog(`🚗 Vehículo estacionado en ${spaceId}: ${car.brandModel} [${car.licensePlate}] (${car.ownerName})`, 'park');
+    
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Ocupado' }).eq('id', spaceId);
   }, [addLog, blockNewEntries]);
 
   // Modified Unpark (NO payments, direct unmarking)
-  const handleUnparkCar = useCallback((spaceId: string, overrideReason?: 'standard' | 'sensor_desync') => {
+  const handleUnparkCar = useCallback(async (spaceId: string, overrideReason?: 'standard' | 'sensor_desync') => {
     let unparkedCarInfo = '';
     setSpaces(prevSpaces => 
       prevSpaces.map(space => {
@@ -200,6 +232,9 @@ export default function App() {
     } else {
       addLog(`💸 Egreso estándar de vehículo de la plaza ${spaceId}: ${unparkedCarInfo}`, 'unpark');
     }
+    
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Libre', sensor_desincronizado: false }).eq('id', spaceId);
   }, [addLog]);
 
   const handleChangeSpaceType = useCallback((spaceId: string, type: ParkingSpaceType) => {
@@ -225,19 +260,23 @@ export default function App() {
     addLog(`🔧 Categoría del espacio ${spaceId} modificada a: ${typeNames[type]}`, 'type_change');
   }, [addLog]);
 
-  const handleReserveSpace = useCallback((spaceId: string) => {
+  const handleReserveSpace = useCallback(async (spaceId: string) => {
+    let nextStatus = 'available';
     setSpaces(prevSpaces => 
       prevSpaces.map(space => {
         if (space.id === spaceId) {
-          const nextStatus = space.status === 'reserved' ? 'available' : 'reserved';
+          nextStatus = space.status === 'reserved' ? 'available' : 'reserved';
           return {
             ...space,
-            status: nextStatus,
+            status: nextStatus as any,
           };
         }
         return space;
       })
     );
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: nextStatus === 'reserved' ? 'Reservado' : 'Libre' }).eq('id', spaceId);
+    
     const space = spaces.find(s => s.id === spaceId);
     if (space) {
       const isReserving = space.status !== 'reserved';
@@ -276,8 +315,10 @@ export default function App() {
 
           if (isStuck) {
             addLog(`⚠️ [DIVERGENCIA] Vehículo ${generatedCar.brandModel} estacionado en ${randomSpot.id} no gatilló correctamente el receptor inalámbrico de piso.`, 'audit');
+            supabase.from('espacios').update({ sensor_desincronizado: true }).eq('id', randomSpot.id);
           } else {
             addLog(`🤖 [Simulador] Auto ${generatedCar.brandModel} (${generatedCar.licensePlate}) se estacionó en la plaza ${randomSpot.id}.`, 'park');
+            supabase.from('espacios').update({ estado: 'Ocupado', sensor_desincronizado: false }).eq('id', randomSpot.id);
           }
 
           return prevSpaces.map(s => {
@@ -307,6 +348,7 @@ export default function App() {
             if (failsToUpdate) {
               addLog(`⚠️ [SENSOR STUCK] El vehículo ${car.brandModel} (${car.licensePlate}) se retiró de la plaza ${randomSpot.id} pero el loop inductivo quedó trabado en ON.`, 'audit');
               setFlowCounters(f => ({ ...f, exited: f.exited + 1 }));
+              supabase.from('espacios').update({ sensor_desincronizado: true }).eq('id', randomSpot.id);
               return prevSpaces.map(s => {
                 if (s.id === randomSpot.id) {
                   return {
@@ -319,6 +361,7 @@ export default function App() {
             } else {
               addLog(`🤖 [Simulador] Auto ${car.brandModel} (${car.licensePlate}) egresó libremente de la plaza ${randomSpot.id}.`, 'unpark');
               setFlowCounters(f => ({ ...f, exited: f.exited + 1 }));
+              supabase.from('espacios').update({ estado: 'Libre', sensor_desincronizado: false }).eq('id', randomSpot.id);
               return prevSpaces.map(s => {
                 if (s.id === randomSpot.id) {
                   return {
@@ -342,7 +385,7 @@ export default function App() {
 
 
   // --- ADMIN MASSIVE PROCEDURES ---
-  const handleSolveAllDesync = () => {
+  const handleSolveAllDesync = async () => {
     let fixedCount = 0;
     setSpaces(prev => 
       prev.map(space => {
@@ -363,9 +406,10 @@ export default function App() {
     } else {
       addLog(`✨ Auditoría General: Sensores limpios, no se encontraron discrepancias físicas activas.`, 'audit');
     }
+    await supabase.from('espacios').update({ estado: 'Libre', sensor_desincronizado: false }).eq('sensor_desincronizado', true);
   };
 
-  const handleClearParkingFull = () => {
+  const handleClearParkingFull = async () => {
     setSpaces(prev => 
       prev.map(space => {
         if (space.status === 'occupied') {
@@ -379,6 +423,7 @@ export default function App() {
         return space;
       })
     );
+    await supabase.from('espacios').update({ estado: 'Libre' }).neq('estado', 'Libre');
     addLog('🧹 Comando Admin: Se liberó la totalidad de espacios activos.', 'system');
   };
 
@@ -1089,55 +1134,30 @@ export default function App() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
                       
-                      {/* B-8 Simulated Out Of Sync */}
-                      {spaces.find(s => s.id === 'B-8')?.sensorDesynced ? (
-                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 shadow-inner flex flex-col justify-between gap-3 animate-pulse">
+                      {spaces.filter(s => s.sensorDesynced).map((space) => (
+                        <div key={space.id} className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 shadow-inner flex flex-col justify-between gap-3 animate-pulse">
                           <div className="flex justify-between items-start">
                             <div>
-                              <span className="text-xs font-black text-slate-905 block">Plaza B-8</span>
+                              <span className="text-xs font-black text-slate-905 block">Plaza {space.id}</span>
                               <p className="text-[10px] text-amber-700 leading-normal mt-1 font-medium">
-                                El cliente Valentina Gallardo reportó egreso hace 15 min, pero la presencia de asfalto acusa &quot;OCUPADO&quot;.
+                                Divergencia inductiva detectada. Presión física ausente, pero base de datos acusa "OCUPADO".
                               </p>
                             </div>
                             <span className="text-[9px] font-bold text-amber-800 bg-amber-200/50 p-1 rounded border border-amber-300">⚠️ DESALINEADO</span>
                           </div>
                           <button
-                            onClick={() => handleUnparkCar('B-8', 'sensor_desync')}
+                            onClick={() => handleUnparkCar(space.id, 'sensor_desync')}
                             className="py-1.5 bg-amber-600 hover:bg-amber-750 text-white font-bold text-[10px] uppercase rounded-xl transition cursor-pointer self-start px-4 shadow-sm"
                           >
                             Forzar Salida (Sincronizar)
                           </button>
                         </div>
-                      ) : (
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-gray-150 flex items-center justify-center text-center font-bold text-slate-400 py-8 text-[11px] font-sans">
-                          <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500 mr-1.5" />
-                          <span>Fila B-8 Concordancia OK</span>
-                        </div>
-                      )}
+                      ))}
 
-                      {/* A-2 Simulated Out Of Sync */}
-                      {spaces.find(s => s.id === 'A-2')?.sensorDesynced ? (
-                        <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 shadow-inner flex flex-col justify-between gap-3 animate-pulse">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-xs font-black text-slate-905 block">Plaza A-2</span>
-                              <p className="text-[10px] text-amber-700 leading-normal mt-1 font-medium">
-                                Divergencia inductiva: Presión ausente, lector de patentes registró salida pero no descontó en mapa.
-                              </p>
-                            </div>
-                            <span className="text-[9px] font-bold text-amber-800 bg-amber-200/50 p-1 rounded border border-amber-300">⚠️ DESALINEADO</span>
-                          </div>
-                          <button
-                            onClick={() => handleUnparkCar('A-2', 'sensor_desync')}
-                            className="py-1.5 bg-amber-600 hover:bg-amber-750 text-white font-bold text-[10px] uppercase rounded-xl transition cursor-pointer self-start px-4 shadow-sm"
-                          >
-                            Forzar Salida (Sincronizar)
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-gray-150 flex items-center justify-center text-center font-bold text-slate-400 py-8 text-[11px] font-sans">
+                      {spaces.filter(s => s.sensorDesynced).length === 0 && (
+                        <div className="col-span-1 md:col-span-2 p-4 bg-slate-50 rounded-2xl border border-gray-150 flex items-center justify-center text-center font-bold text-slate-400 py-8 text-[11px] font-sans">
                           <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500 mr-1.5" />
-                          <span>Fila A-2 Concordancia OK</span>
+                          <span>Todos los sensores alineados y funcionando OK</span>
                         </div>
                       )}
 

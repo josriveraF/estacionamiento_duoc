@@ -1,31 +1,52 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 
-// --- MOCK DATA PARA LA VALIDACIÓN ---
-const MOCK_SPOTS = [
-  { id: 'A-01', status: 'available' },
-  { id: 'A-02', status: 'available' },
-  { id: 'A-03', status: 'occupied' }, // Ocupado
-  { id: 'A-04', status: 'available' },
-  { id: 'B-01', status: 'occupied' }, // Ocupado
-  { id: 'B-02', status: 'available' },
-  { id: 'B-03', status: 'available' },
-  { id: 'B-04', status: 'available' },
-];
+// Eliminamos MOCK_SPOTS ya que usaremos Supabase
 
 function App() {
   // --- ESTADOS DE LA APLICACIÓN ---
-  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'register_map', 'report_block', 'reserve_map', 'reserve_time'
+  const [currentView, setCurrentView] = useState('dashboard');
   const [parkedSpot, setParkedSpot] = useState(null); 
-  const [reservedSpot, setReservedSpot] = useState(null); // Espacio reservado con anticipación
+  const [reservedSpot, setReservedSpot] = useState(null);
   const [selectedSpotForReservation, setSelectedSpotForReservation] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [isInside, setIsInside] = useState(false);
+  
+  // Nuevo estado para los espacios desde Supabase
+  const [dbSpots, setDbSpots] = useState([]);
+
+  React.useEffect(() => {
+    // Carga inicial
+    const fetchEspacios = async () => {
+      const { data, error } = await supabase.from('espacios').select('*').order('id');
+      if (data) setDbSpots(data);
+    };
+    fetchEspacios();
+
+    // Suscripción en tiempo real
+    const channel = supabase.channel('realtime-espacios')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'espacios' }, (payload) => {
+        setDbSpots(current => {
+          const idx = current.findIndex(s => s.id === payload.new.id);
+          if (idx !== -1) {
+            const updated = [...current];
+            updated[idx] = payload.new;
+            return updated;
+          }
+          return [...current, payload.new];
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   // --- HANDLERS ---
-  const handleSimulateNFC = () => {
+  const handleSimulateNFC = async () => {
     setIsInside(true);
     if (reservedSpot) {
+      // Update Supabase to Ocupado
+      await supabase.from('espacios').update({ estado: 'Ocupado' }).eq('id', reservedSpot.id);
       // Si tenía reserva y entró, se le asigna automáticamente
       setParkedSpot(reservedSpot.id);
       setReservedSpot(null);
@@ -36,50 +57,71 @@ function App() {
     }
   };
 
-  const handleSelectSpotToPark = (spotId) => {
+  const handleSelectSpotToPark = async (spotId) => {
     setErrorMsg('');
-    const spot = MOCK_SPOTS.find(s => s.id === spotId);
+    const spot = dbSpots.find(s => s.id === spotId);
     
-    if (spot && spot.status === 'occupied') {
+    if (spot && spot.estado === 'Ocupado') {
       setErrorMsg('El espacio ya se encuentra ocupado. Por favor, seleccione el número correcto.');
       return;
     }
+    
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Ocupado' }).eq('id', spotId);
     setParkedSpot(spotId);
     setCurrentView('dashboard');
   };
 
-  const handleSelectSpotToReserve = (spotId) => {
+  const handleSelectSpotToReserve = async (spotId) => {
     setErrorMsg('');
-    const spot = MOCK_SPOTS.find(s => s.id === spotId);
+    const spot = dbSpots.find(s => s.id === spotId);
     
-    if (spot && spot.status === 'occupied') {
-      setErrorMsg('Este espacio ya está ocupado y no puede ser reservado.');
+    if (spot && (spot.estado === 'Ocupado' || spot.estado === 'Reservado')) {
+      setErrorMsg('Este espacio no está disponible para reserva.');
       return;
     }
     
     setSelectedSpotForReservation(spotId);
-    setCurrentView('reserve_time'); // Pasar a la selección de tiempo
+    setCurrentView('reserve_time');
   };
 
-  const handleConfirmReservation = (timeSelection) => {
+  const handleConfirmReservation = async (timeSelection) => {
+    // Update Supabase
+    await supabase.from('espacios').update({ estado: 'Reservado' }).eq('id', selectedSpotForReservation);
+    
     setReservedSpot({ id: selectedSpotForReservation, time: timeSelection });
     setSelectedSpotForReservation(null);
     setCurrentView('dashboard');
     alert(`¡Reserva confirmada en el espacio ${selectedSpotForReservation}!`);
   };
 
-  const handleCancelReservation = () => {
+  const handleCancelReservation = async () => {
+    if (reservedSpot) {
+      await supabase.from('espacios').update({ estado: 'Libre' }).eq('id', reservedSpot.id);
+    }
     setReservedSpot(null);
     alert('Tu reserva ha sido cancelada.');
   };
 
-  const handleReportBlocked = (e) => {
+  const handleReportBlocked = async (e) => {
     e.preventDefault();
+    if (parkedSpot) {
+      await supabase.from('incidentes').insert([
+        { espacio_id: parkedSpot, estado: 'Pendiente', patente_infractor: 'Doble Fila' }
+      ]);
+    } else {
+      await supabase.from('incidentes').insert([
+        { estado: 'Pendiente', patente_infractor: 'Doble Fila' }
+      ]);
+    }
     alert('Alerta enviada al guardia y al conductor del vehículo que bloquea.');
     setCurrentView('dashboard');
   };
 
-  const handleLeaveParking = () => {
+  const handleLeaveParking = async () => {
+    if (parkedSpot) {
+      await supabase.from('espacios').update({ estado: 'Libre' }).eq('id', parkedSpot);
+    }
     setParkedSpot(null);
     setIsInside(false);
     alert('Salida NFC detectada. Espacio liberado automáticamente.');
@@ -95,20 +137,20 @@ function App() {
         </span>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-        {MOCK_SPOTS.map((spot) => (
+        {dbSpots.map((spot) => (
           <button
             key={spot.id}
             onClick={() => onSelectSpot(spot.id)}
             className={`relative h-20 rounded-xl border-2 flex items-center justify-center transition-all active:scale-95
-              ${spot.status === 'occupied' 
+              ${(spot.estado === 'Ocupado' || spot.estado === 'Reservado') 
                 ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' 
                 : 'bg-white border-blue-200 hover:border-blue-500 hover:bg-blue-50 shadow-sm'}
             `}
           >
-            <span className={`text-xl font-black ${spot.status === 'occupied' ? 'text-gray-400' : 'text-[#003366]'}`}>
+            <span className={`text-xl font-black ${(spot.estado === 'Ocupado' || spot.estado === 'Reservado') ? 'text-gray-400' : 'text-[#003366]'}`}>
               {spot.id}
             </span>
-            {spot.status === 'occupied' && (
+            {(spot.estado === 'Ocupado' || spot.estado === 'Reservado') && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="material-symbols-outlined text-gray-400 text-4xl opacity-20" data-icon="directions_car">directions_car</span>
               </div>
